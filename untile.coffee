@@ -8,20 +8,22 @@ sourceFile = process.argv.slice(-1)[0]
 img = new Canvas.Image
 img.src = fs.readFileSync sourceFile
 
-# render to canvas
+# create canvas
 stage = new Canvas img.width, img.height
 ctx = stage.getContext '2d'
 
+# render image to canvas
 ctx.drawImage img, 0, 0, img.width, img.height
 
+# get pixel data
 imgData = ctx.getImageData(0, 0, img.width, img.height)
 pixels = imgData.data
 
-# 640 x 59
+# calculate tiles
 tileWidth = 32
 n_tiles = Math.ceil img.width/32
 
-# start comparisons for every tile
+# tile edge comparison
 compare = (reverse) ->
     matches = {}
     matchDiffs = {}
@@ -29,10 +31,11 @@ compare = (reverse) ->
     for tile_A in [1..img.width/tileWidth]
     
         # edges of tile A
-        if reverse
-            edge_A = (tile_A-1) * tileWidth * 4
-        else
-            edge_A = tile_A * tileWidth * 4 - 4
+        edge_A =
+            if reverse
+                (tile_A-1) * tileWidth * 4 # left edge
+            else
+                tile_A * tileWidth * 4 - 4 # right edge
     
         # store the difference between edges of tiles
         compared = {}
@@ -40,14 +43,14 @@ compare = (reverse) ->
         # compare this to every other column
         for tile_B in [1..img.width/tileWidth] when tile_B != tile_A
         
-            # left edge of tile B
-            if reverse
-                edge_B = tile_B * tileWidth * 4 - 4
-            else
-                edge_B = (tile_B-1) * tileWidth * 4
+            edge_B =
+                if reverse
+                    tile_B * tileWidth * 4 - 4 # right edge
+                else
+                    (tile_B-1) * tileWidth * 4 # left edge
                 
             diff = 0
-        
+            
             for line in [0..img.height]
             
                 # position in rgb array for each pixel of column
@@ -59,9 +62,10 @@ compare = (reverse) ->
                 G_diff   = Math.abs(pixels[i_A+1] - pixels[i_B+1]) / 255
                 B_diff   = Math.abs(pixels[i_A+2] - pixels[i_B+2]) / 255
                 diff += ((R_diff + G_diff + B_diff) * 3) or 0
-        
+            
             compared[tile_B] = diff
-    
+        
+        # get column with the least difference
         lastDiff = Infinity
         match = 0
         for i, diff of compared
@@ -79,12 +83,14 @@ compare = (reverse) ->
         diffs: matchDiffs
     }
 
+# compare right to left edges
 matches = compare().matches
 next = n_tiles
 order = [n_tiles]
 order.push next while (next = matches[next]) not in order
 order.pop()
 
+# compare left to right edges
 matches = compare(true).matches
 next = n_tiles
 order2 = []
@@ -95,10 +101,10 @@ pos = n_tiles
 while order[pos] == order2[pos]
     pos--
 
-# cut it
+# rearrange ends
 Array::push.apply order, order.splice(0, pos)
 
-# re-order tiles
+# re-order tiles on canvas
 for tile, pos in order
     # source
     [sx, sy] = [(tile-1) * tileWidth, 0]
